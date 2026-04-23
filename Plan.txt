@@ -1,0 +1,55 @@
+TASK 8: FLIGHT TRACKING SYSTEM - EXECUTION PLAN & ROLES
+1. PROJECT BASELINE (NON-NEGOTIABLE)
+   - Data Format: All API responses must be strictly JSON.
+   - Authentication: Every request (except Register) requires a valid 'apikey'.
+   - Flight Statuses: Must use these exact strings: "Scheduled", "Boarding", "In Flight", "Landed".
+   - The 60-Second Rule: Passengers have 60 seconds to board after a flight is dispatched.
+
+2. GROUP ROLES & RESPONSIBILITIES
+   * PERSON 3: DATABASE OWNER & ARCHITECT (Motheo)
+        Core Duty: Build the foundation the entire system runs on.
+        - Required Outputs:
+            Created tables (Users, Airports, Flights, PassengerFlights).
+            Populate 10+ Airports (real IATA codes) and 10+ Flights.
+            UpdateFlightPosition: Internal endpoint in api.php for the Node.js server to update GPS and status.
+        
+        - Definition of Done: The database is live, relationships (Foreign Keys) are working, and the team has data to test against.
+
+   * PERSON 1: FLIGHT READER (GETTERS)
+        Core Duty: Build the "Read-Only" side of the API.
+        Required Outputs (Endpoints in api.php):
+           - GetAllFlights:
+                ATC sees ALL flights.
+                Passengers see ONLY their booked flights.
+
+           - GetFlight:
+                Full details/passenger list for ATC.
+                Limited flight-only details for the specific Passenger booked on it.
+        
+       - Definition of Done: Role-based filtering works correctly and SQL JOINs return accurate data.
+
+   * PERSON 2: STATE CONTROLLER (SETTERS)
+        Core Duty: Build the "Action" side of the API.
+        Required Outputs (Endpoints in api.php):
+           - DispatchFlight (ATC ONLY):
+                Changes status from "Scheduled" to "Boarding".
+                Records the dispatch timestamp.
+
+           - BoardFlight (Passenger ONLY):
+                Verifies the user is on the flight.
+                Validates that < 60 seconds have passed since dispatch.
+                Updates boarding_confirmed = 1.
+        
+           - Definition of Done: Logic prevents illegal state changes and the 60-second timer is enforced.
+
+3. EXECUTION FLOW
+    Person 3 sets up the Database.
+    Person 1 writes queries to display that data to the users.
+    Person 2 writes the logic to move the flight through its lifecycle.
+
+Integration: The group merges code into a single api.php and tests on Wheatley.
+
+4. CRITICAL RULES
+    Schema Lock: No one changes table or column names after Person 3 finishes.
+    Security: Use Prepared Statements for all SQL queries to prevent injection.
+    Testing: Test all endpoints using Postman or Bruno before connecting the UI.
