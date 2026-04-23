@@ -16,7 +16,7 @@
         include __DIR__ . '/config.php'; //Load database connection fomr config.php
 
         //Ensure database connection exists before continuing
-        if (!isset($configure)) {
+        if (!isset($conn)) {
             http_response_code(500);
             exit(json_encode([
                 'status' => 'error',
@@ -82,7 +82,7 @@
         //Directs requests to correct function based on "type"
         switch ($type) {
             case "UpdateFlightPosition":
-                updateFlightPosition($data, $configure);
+                updateFlightPosition($data, $conn);
                 break;
 
             default:

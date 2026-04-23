@@ -19,14 +19,68 @@
                 cos216_asynconus
 
     ### 3. Configure Database Connection
-        Inside config.php
+        Inside config.php, ensures that MySQL connection is correctly setup.
 
 ## Running the Project
 
     Access via the browser:
         http://localhost:8081/HomeWorkAssignment/
 
+    NOTE:
+        If you open api.php directly in the browser like:
+            http://localhost/HomeWorkAssignment/api.php
+
+        You will see an error:
+            {
+                "status": "error",
+                "message": "Missing request type"
+            }
+        
+        This is expected behaviour.
+
+        * Why this happens?
+            - The API is designed to only respond to POST requests with JSON data
+            - Opening it in a browser sends no request body
+            - Therefore, the required "type" field is missing
+
+        - This does NOT mean the API is broken
+        - It will work correctly when proper data is sent
+
 ## Testing
     1. Ensure Apache and MySQL are running
-    2. Open:
-        http://localhost:8081/HomeWorkAssignment/getUsers.php
+
+    # Using the Browser
+       2. (GET) Example:
+            http://localhost:8081/HomeWorkAssignment/getUsers.php
+
+    # Using POSTMAN
+        3. Open POSTMAN
+        4. Create a Request to URL http://localhost/HomeWorkAssignment/api.php
+
+        5. Set Headers:
+            - Go to Headers tab and add:
+                - Key: Content-Type, Value: application/JSON
+                
+        6. Send JSON body
+            - Go to Body -> raw -> JSON and test endpoints like:
+            
+            # For Updating Flight Position
+                PATCH:
+                
+                    {
+                        "type": "UpdateFlightPosition",
+                        "flight_id": 1,
+                        "latitude": -26.2041,
+                        "longitude": 28.0473,
+                        "status": "In Flight"
+                    }
+
+                    - Expected Response:
+                    {
+                        "status": "success",
+                        "message": "Flight position updated",
+                        "timestamp": 1710000000000
+                    }
+
+    # TIPS:
+        * Always include "type" in your request
