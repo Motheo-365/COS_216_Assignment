@@ -112,5 +112,21 @@
                         "timestamp": 171000000100
                      }
 
+            # For Board Flight
+                   PATCH:
+
+                     {
+                        "type": "BoardFlight",
+                        "email" : input a user in the user table,
+                        "flight_id" : 1
+                     }
+
+                     - Expected Response:
+                     {
+                        "status": "success",
+                        "message" : "Boarding confirmed successfully",
+                        "timestamp": 171000000100
+                     }
+
     # TIPS:
         * Always include "type" in your request
