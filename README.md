@@ -82,5 +82,35 @@
                         "timestamp": 1710000000000
                     }
 
+            # For Get Airports 
+                  PATCH:
+
+                     {
+                        "type": "GetAirports",
+                     }
+
+                     - Expected Response:
+                     {
+                        "status": "success",
+                        "message" : "Request has been successful",
+                        "timestamp": 171000000100
+                     }
+
+            # For Dispatch Flight
+                  PATCH:
+
+                     {
+                        "type": "DispatchFlight",
+                        "email" : input a user in the user table,
+                        "flight_id" : 1
+                     }
+
+                     - Expected Response:
+                     {
+                        "status": "success",
+                        "message" : "Flight has been successfully updated to Boarding",
+                        "timestamp": 171000000100
+                     }
+
     # TIPS:
         * Always include "type" in your request
