@@ -84,6 +84,14 @@
             case "UpdateFlightPosition":
                 updateFlightPosition($data, $conn);
                 break;
+            
+            case "DispatchFlight":
+                dispatchFlight($data,$conn);
+                break;
+
+            case "GetAirports":
+                getAirports($data,$conn);
+                break;
 
             default:
                 respond("error", "Unknown endpoint", null, 400);
@@ -140,5 +148,72 @@
             else {
                 respond("error", "Update failed");
             }
+        }
+
+        //Transitions a flight from Scheduled to Boarding. ATC only.
+        function dispatchFlight($input,$db){
+                
+               $user_email = $input['email'] ?? null; // type of user it has to be ATC else stop everything
+               $flightId = $input['flight_id'] ?? null; //Id of the flight to dispatch 
+               
+               //check if the type of user is ATC and if the flight id is valid
+               if(!$flightId || $user_email == null){
+                    respond("error","Missing required fields",null,400);
+               }
+               $query = "SELECT 1 FROM users WHERE email = ? AND type = 'ATC' "; //check if the user email belongs to an ATC to continue
+               $stmt = $db->prepare($query);
+               $stmt->bind_param("s",$user_email);
+               $stmt->execute();
+
+               $result = $stmt->get_result();
+
+               if($result->num_rows == 0){ // if no result are returned it means the user is not an ATC
+                    respond("error","User is not Authorized",null,400);
+               }
+               
+               $query = "SELECT 1 FROM Flights WHERE id = ? AND status = 'Scheduled'"; //check if the status of the flight id is Scheduled if not return an error
+               $stmt = $db->prepare($query);
+               $stmt->bind_param("i",$flightId);
+               $stmt->execute();
+
+               $result = $stmt->get_result();
+
+               if($result->num_rows === 0){
+                    respond("error","No such Scheduled Flight with that ID",null,400);
+               }
+               else{
+                    $timestamp = date("Y-m-d H:i:s"); // create a timestamp for the exact date it was executed
+                    $new_status = "Boarding"; // new status to update to 
+                    $query = "UPDATE flights 
+                            SET status = ?, dispatched_at = ?
+                            WHERE id = ?";
+
+                    $stmt = $db->prepare($query);
+                    $stmt->bind_param("ssi",$new_status,$timestamp,$flightId);
+                    
+                    if(!$stmt->execute()){
+                        respond("error","Failed to update the flight status",null,400);
+                    }
+                    else{
+                        respond("success","Flight has been successfully updated to Boarding",null);
+                    }
+               }
+        }
+        
+        //Returns the full list of airports with their GPS coordinates used to plot markers on the Leaflet map
+        function getAirports($input,$db){
+            $query = "SELECT id,name,iata_code,city,country,latitude,longitude FROM Airports";
+            $stmt = $db->prepare($query); // prepare the query to be sent to the database
+            $stmt->execute(); //runs the query across the Airports table to retrieve the required information
+
+            $result = $stmt->get_result(); // get the results of the query
+
+            if($result->num_rows == 0){
+                respond("error","No data matches your request",null,400);
+            }
+
+            $row = $result->fetch_all(MYSQLI_ASSOC);
+            respond("success","Request has been successful",$row);
+            return;
         }
 ?>
