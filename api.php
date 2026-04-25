@@ -92,6 +92,10 @@
             case "GetAirports":
                 getAirports($data,$conn);
                 break;
+            
+            case "BoardFlight":
+                boardFlight($data,$conn);
+                break;
 
             default:
                 respond("error", "Unknown endpoint", null, 400);
@@ -215,5 +219,82 @@
             $row = $result->fetch_all(MYSQLI_ASSOC);
             respond("success","Request has been successful",$row);
             return;
+        }
+
+        function boardFlight($input,$db){
+            $user_email = $input['email'] ?? null;
+            $flightId = $input['flight_id'] ?? null;
+
+            //check if input is not null 
+            if(!$user_email || !$flightId){
+                respond("error","Missing required fields",null,400);
+            }
+
+            //check if the passenger with the email exists as a passenger
+            $query = "SELECT id FROM Users WHERE email = ? AND type = 'Passenger'";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("s",$user_email);
+            $stmt->execute();
+
+            $result = $stmt->get_result();
+
+            if($result->num_rows == 0){
+                respond("error","User is not a Passenger",null,400);
+            }
+
+            $row = $result->fetch_assoc();
+            $user_id = $row['id']; //user ID if they exists
+
+            //verify that the user is part of the boardFlight
+            $query = "SELECT 1 FROM Passenger_Flights WHERE passenger_id = ? AND flight_id = ?";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("ii",$user_id,$flightId);
+            $stmt->execute();
+
+            $result = $stmt->get_result();
+
+            if($result->num_rows == 0){
+                respond("error","User is not Registered in the Flight",null,400);
+            }
+
+            //check if dispatch exists for the flight look in the flights table 
+            $query = "SELECT dispatched_at FROM Flights WHERE id = ? AND dispatched_at IS NOT NULL";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("i",$flightId);
+            $stmt->execute();
+
+            $result = $stmt->get_result();
+
+            if($result->num_rows == 0){
+                respond("error","Flight has not been dispatched yet",null,400);
+            }
+
+            $row = $result->fetch_assoc();
+            $dispatchAt = $row['dispatched_at'];
+            $currentTime = date("Y-m-d H:i:s");
+
+            $dispatchTime = strtotime($dispatchAt);
+            $now = time();
+
+            $diff = $now - $dispatchTime;
+
+            if($diff > 60){
+                respond("error","Boarding window expired",null,400);
+            }
+
+            $num = 1;
+            $query = "UPDATE Passenger_Flights
+                        SET boarding_confirmed = ?,  confirmed_at= ?
+                        WHERE passenger_id = ? AND flight_id = ?";
+
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("isii",$num,$currentTime,$user_id,$flightId);
+
+            if(!$stmt->execute()){
+                respond("error","Failed to update the Boarding Flight");
+            }
+
+            respond("success","Boarding confirmed successfully",null);
+
         }
 ?>
