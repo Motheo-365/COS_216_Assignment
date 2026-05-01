@@ -1,4 +1,5 @@
-TASK 8: FLIGHT TRACKING SYSTEM - EXECUTION PLAN & ROLES
+TASK 1: FLIGHT TRACKING SYSTEM - EXECUTION PLAN & ROLES
+
 1. PROJECT BASELINE (NON-NEGOTIABLE)
    - Data Format: All API responses must be strictly JSON.
    - Authentication: Every request (except Register) requires a valid 'apikey'.
@@ -49,7 +50,130 @@ TASK 8: FLIGHT TRACKING SYSTEM - EXECUTION PLAN & ROLES
 
 Integration: The group merges code into a single api.php and tests on Wheatley.
 
-4. CRITICAL RULES
+4. TASK 2 ASSIGNMENTS
+   Due to time constraints this week, Task 2 will receive light focus. Possible light options include:
+   - Basic CLI commands for database operations (e.g., view flights, check status)
+   - Simple command-line interface for quick testing
+   - Minimal scripting for data import/export
+   
+   Assignment: Person 3 (Motheo) - Implement basic CLI functionality if time allows, otherwise defer to future tasks.
+
+5. CRITICAL RULES
     Schema Lock: No one changes table or column names after Person 3 finishes.
     Security: Use Prepared Statements for all SQL queries to prevent injection.
     Testing: Test all endpoints using Postman or Bruno before connecting the UI.
+
+TASK 2: Multi-User NodeJS WebSocket server
+
+     1. PROJECT BASELINE (NON-NEGOTIABLE)
+     - Architecture Rule: NodeJS is the ONLY real-time layer (no direct Angular -> PHP for live updates).
+     - Message Format: All WebSocket messages must be JSON only.
+     - User Roles: Must strictly support:
+          - Passenger
+          - ATC
+     - Flight Statuses: Must use these exact strings: "Scheduled", "Boarding", "In Flight", "Landed".
+     - The 60-Second Rule: Passengers have 60 seconds to board after a flight is dispatched. Server must enforce this (not front-end).
+     - Time Scaling Rule: 
+          Flight duration: N hours = N seconds (animation)
+     - Server hosting rule: NodeJS server runs locally only (NOT WHEATLEY)
+
+     2. GROUP ROLES & RESPONSIBILITIES
+
+          * PERSON 1: Server Core & Connection Manager
+               Core Duty: Build the backbone of the WebSocket server
+               Required Outputs:
+                    - NodeJS server setup( ws or socket.io)
+
+                    - Port handling
+                         - Accept user input
+                         - Validate range (1024 - 49151)
+
+                    - Connection Handling:
+                         - Accept multiple clients
+                         - Handle disconnects
+
+                    - Maintain mappings
+                         username -> socket
+                         socket -> user info
+
+                    - CLI Commands:
+                         - QUIT: shutdown server
+                         - KILL <username> : disconnect user
+                         - FLIGHT STATUS <id> : print flight info
+
+               Definition of Done:
+                    - Multiple clients can connect simultaneously
+                    - CLI commands work correctly
+                    - Users are tracked and removable
+          
+          * PERSON 2: Message Handler and PI Integration
+                Core Duty: Control all system logic and communication with PHP API.
+                Required Outputs:
+                    * Handle Incoming WebSocket Messages:
+                         - Displatch (ATC only)
+                              - Call DispatchFlight API
+                              - Start boarding phase
+                              - Trigger 60-second timer
+                              - Notify passengers (via Boarding Call)
+                         
+                         - BOARD (Passenger only)
+                              - Call BoardFlight API
+                              - Validate:
+                                   Passenger is on flight
+                                   Within 60 seconds
+                              - Send:
+                                   success -> notify ATC
+                                   failure -> error + notify ATC (no-show)
+
+                         - TRACK
+                              - Subscribe user to flight updates
+                              - Enforce:
+                                   - Passenger -> only their flights
+                                   - ATC -> any flight
+
+                         - API Intergration:
+                              - Connect to:
+                                   - DispatchFlight
+                                   - BoardFlight
+                                   - UpdateFlightPosition
+                                   - GetFlight/GetAllFlights
+
+               Definition of Done:
+                    - All message types handled correctl
+                    - API calls succeed and update DB
+                    - Role restrictions enforced
+
+          * PERSON 3: Flight Simulation and Real-Time Engine
+               Core Duty: Build real-time flight tracking system.
+               Required Outputs:
+                    - Flight Animation System
+                         Interpolate:
+                              origin -> destination
+                         Based on:
+                              Duration (N hours = N seconds)
+
+                    - Timer System
+                         - Track:
+                              Boarding window (60s)
+                              Flight Duration
+                         - Trigger
+                              Boarding -> In Flight
+                              In Flight -> Landed
+
+                    - Real-Time Broadcasting
+                         Maintain:
+                              flightId -> subsribed sockets
+                         Send:
+                              Positin updates continuously
+                              
+                    - API Updates
+                         - Call updateFlightPosition every tick or interval (Justify in README)
+
+                    - STATE Transitions:
+                         Enforce:
+                              Schedules -> Boarding -> In Flight -> Landed
+
+               Definition of Done:
+                    - Aircraft moved smoothly
+                    - SUbscribers receive live updates
+                    - Status updates correctly in DB
