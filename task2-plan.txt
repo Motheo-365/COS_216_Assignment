@@ -1,0 +1,138 @@
+TASK 2: MULTI-USER WEBSOCKET SERVER – EXECUTION PLAN & ROLES
+
+1. PROJECT BASELINE (NON-NEGOTIABLE)
+  - Architecture Rule:
+    Angular Client ⇄ NodeJS Server ⇄ PHP API
+    NodeJS is the only real-time layer.
+
+  - Message Format:
+    All WebSocket messages must be JSON.
+
+  - User Roles:
+    Passenger and ATC must be supported.
+
+  - Flight Statuses:
+    "Scheduled", "Boarding", "In Flight", "Landed"
+
+  - 60-Second Rule:
+    Passengers have 60 seconds to confirm boarding after dispatch.
+
+  - Time Scaling Rule:
+    Flight duration: N hours = N seconds.
+
+  - Server Hosting Rule:
+    NodeJS server runs locally (not on Wheatley).
+
+2. GROUP ROLES & RESPONSIBILITIES
+
+  ** PERSON 1: SERVER CORE & CONNECTION MANAGER
+    Core Duty: Build the backbone of the server.
+
+    Required Outputs:
+      - Setup NodeJS server
+      - Handle CLI input (process.stdin)
+      - Parse commands
+      - Maintain user connections (later sockets)
+      - Implement CLI commands:
+          QUIT, KILL, FLIGHT STATUS
+
+    Definition of Done:
+      - Server runs and accepts input
+      - Commands are detected and routed correctly
+
+  ** PERSON 2: COMMAND LOGIC (BRAIN)
+    Core Duty: Implement logic for CLI commands.
+
+    Required Outputs:
+     1. QUIT:
+      - Prints shutdown message
+      - Terminates server
+
+     2. KILL <username>:
+      - Checks if user exists
+      - Prints success or error message
+
+     3. FLIGHT STATUS <id>:
+      - Retrieves flight data
+      - Prints:
+        Flight number
+        Status
+        Coordinates
+        Boarding stats
+
+    Important Rule:
+    - Must use helper functions (no direct data access)
+
+    Definition of Done:
+    - All commands work correctly
+    - Handles invalid input
+
+  ** PERSON 3: MOCK DATA LAYER
+    Core Duty: Simulate database/API data.
+
+    Required Outputs:
+      1. Mock Users:
+        - Array of user objects (username, role)
+
+      2. Mock Flights:
+        - Array of flight objects (id, status, coordinates, passengers)
+
+      3. Helper Functions:
+        - getUser(username)
+        - getFlightById(id)
+
+    Important Rule:
+      - Do not expose raw data
+      - Only access data via functions
+
+    Definition of Done:
+      - Data is structured correctly
+      - Functions return accurate results
+
+3. EXECUTION FLOW
+  Example Command: FLIGHT STATUS 1
+
+    Step 1: Server reads input
+    Step 2: Command is passed to handler
+    Step 3: Logic parses command
+    Step 4: Logic calls data function
+    Step 5: Data layer returns result
+    Step 6: Output is printed
+
+4. EXPECTED OUTPUT
+
+  QUIT:
+    > QUIT
+
+  Shutting down server...
+
+  KILL:
+    > KILL john
+    
+  User john disconnected
+
+  FLIGHT STATUS:
+    > FLIGHT STATUS 1
+
+  Flight: SA203
+  Status: Boarding
+  Location: (-26.2041, 28.0473)
+  Boarded: 3/5
+
+5. DEVELOPMENT STRATEGY
+  Phase 1:
+  - Use mock data only
+  - Build CLI system
+
+  Phase 2:
+  - Add WebSocket support
+
+  Phase 3:
+  - Replace mock data with API calls
+
+6. CRITICAL RULES
+  - Do not hardcode data inside logic
+  - Always use helper functions
+  - Keep responsibilities separate
+  - Do not integrate API too early
+  - Test CLI before moving forward
