@@ -96,6 +96,14 @@
             case "BoardFlight":
                 boardFlight($data,$conn);
                 break;
+            
+            case "GetAllFlights":
+                getAllFlights($data, $conn);
+                break;
+
+            case "GetFlight":
+                getFlight($data, $conn);
+                break;
 
             default:
                 respond("error", "Unknown endpoint", null, 400);
@@ -297,4 +305,375 @@
             respond("success","Boarding confirmed successfully",null);
 
         }
+
+    //================================== GETALLFLIGHTS SECTION =====================================
+
+    function getAllFlights($input, $db) {
+        $apiKey = $input['api_key'] ?? null;
+        
+        //here we authenticate the user
+        $user = authenticate($db, $apiKey);
+        
+        if (!$user) {
+            respond("error", "Authentication failed", null, 401);//the error message that is returned if the authentication fails
+        }
+        
+        $role = $user['type'];
+        $userId = $user['id'];
+        
+        if ($role === 'ATC') {
+            //getting all the flights
+            $query = "
+                SELECT 
+                    f.id,
+                    f.flight_number,
+                    f.departure_time,
+                    f.flight_duration_hours,
+                    f.status,
+                    f.current_latitude,
+                    f.current_longitude,
+                    f.dispatched_at,
+                    origin.id as origin_id,
+                    origin.name as origin_name,
+                    origin.iata_code as origin_iata,
+                    origin.city as origin_city,
+                    origin.country as origin_country,
+                    origin.latitude as origin_latitude,
+                    origin.longitude as origin_longitude,
+                    dest.id as dest_id,
+                    dest.name as dest_name,
+                    dest.iata_code as dest_iata,
+                    dest.city as dest_city,
+                    dest.country as dest_country,
+                    dest.latitude as dest_latitude,
+                    dest.longitude as dest_longitude
+                FROM flights f
+                INNER JOIN airports origin ON f.origin_airport_id = origin.id
+                INNER JOIN airports dest ON f.destination_airport_id = dest.id
+                ORDER BY f.departure_time ASC
+            ";
+            $stmt = $db->prepare($query);
+            
+        } else if ($role === 'Passenger') {
+            //rememeber, the passenger should only see the flights they are booked on
+            $query = "
+                SELECT 
+                    f.id,
+                    f.flight_number,
+                    f.departure_time,
+                    f.flight_duration_hours,
+                    f.status,
+                    f.current_latitude,
+                    f.current_longitude,
+                    f.dispatched_at,
+                    pf.seat_number,
+                    pf.boarding_confirmed,
+                    pf.confirmed_at,
+                    origin.id as origin_id,
+                    origin.name as origin_name,
+                    origin.iata_code as origin_iata,
+                    origin.city as origin_city,
+                    origin.country as origin_country,
+                    origin.latitude as origin_latitude,
+                    origin.longitude as origin_longitude,
+                    dest.id as dest_id,
+                    dest.name as dest_name,
+                    dest.iata_code as dest_iata,
+                    dest.city as dest_city,
+                    dest.country as dest_country,
+                    dest.latitude as dest_latitude,
+                    dest.longitude as dest_longitude
+                FROM flights f
+                INNER JOIN airports origin ON f.origin_airport_id = origin.id
+                INNER JOIN airports dest ON f.destination_airport_id = dest.id
+                INNER JOIN passenger_flights pf ON f.id = pf.flight_id
+                WHERE pf.passenger_id = ?
+                ORDER BY f.departure_time ASC
+            ";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("i", $userId);
+            
+        } else {
+            respond("error", "Unauthorized role", null, 403);
+        }
+        
+        if (!$stmt) {
+            respond("error", "Database query failed", null, 500);
+        }
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows === 0) {
+            respond("success", "No flights found", []);
+        }
+        
+        $flights = [];
+        while ($row = $result->fetch_assoc()) {
+            //building the flight object
+            $flight = [
+                'id' => $row['id'],
+                'flight_number' => $row['flight_number'],
+                'departure_time' => $row['departure_time'],
+                'flight_duration_hours' => (float)$row['flight_duration_hours'],
+                'status' => $row['status'],
+                'current_position' => [
+                    'latitude' => (float)$row['current_latitude'],
+                    'longitude' => (float)$row['current_longitude']
+                ],
+                'origin' => [
+                    'id' => $row['origin_id'],
+                    'name' => $row['origin_name'],
+                    'iata_code' => $row['origin_iata'],
+                    'city' => $row['origin_city'],
+                    'country' => $row['origin_country'],
+                    'coordinates' => [
+                        'latitude' => (float)$row['origin_latitude'],
+                        'longitude' => (float)$row['origin_longitude']
+                    ]
+                ],
+                'destination' => [
+                    'id' => $row['dest_id'],
+                    'name' => $row['dest_name'],
+                    'iata_code' => $row['dest_iata'],
+                    'city' => $row['dest_city'],
+                    'country' => $row['dest_country'],
+                    'coordinates' => [
+                        'latitude' => (float)$row['dest_latitude'],
+                        'longitude' => (float)$row['dest_longitude']
+                    ]
+                ]
+            ];
+            
+            //adding dispatched_at if it exists (only for dispatched flights)
+            if ($row['dispatched_at'] !== null) {
+                $flight['dispatched_at'] = $row['dispatched_at'];
+            }
+            
+            //adding the passenger-specific fields if role is Passenger
+            if ($role === 'Passenger') {
+                $flight['booking_details'] = [
+                    'seat_number' => $row['seat_number'],
+                    'boarding_confirmed' => (bool)$row['boarding_confirmed'],
+                    'confirmed_at' => $row['confirmed_at']
+                ];
+            }
+            
+            $flights[] = $flight;
+        }
+        
+        respond("success", "Flights retrieved successfully", [
+            'role' => $role,
+            'count' => count($flights),
+            'flights' => $flights
+        ]);
+    }
+
+    //======================== GETFLIGHT CODE ====================================
+
+    function getFlight($input, $db) {
+
+        $apiKey = $input['api_key'] ?? null;
+        $flightId = $input['flight_id'] ?? null;
+        
+        //validating the required fields
+        if (!$flightId) {
+            respond("error", "Missing flight_id parameter", null, 400);
+        }
+        
+        //authenticating the user
+        $user = authenticate($db, $apiKey);
+        
+        if (!$user) {
+            respond("error", "Authentication failed", null, 401);
+        }
+        
+        $role = $user['type'];
+        $userId = $user['id'];
+        
+        //we first have to check if flight exists and get basic details
+        if ($role === 'ATC') {
+            //the ATC will then get the full flight details with passenger list
+            $query = "
+                SELECT 
+                    f.id,
+                    f.flight_number,
+                    f.departure_time,
+                    f.flight_duration_hours,
+                    f.status,
+                    f.current_latitude,
+                    f.current_longitude,
+                    f.dispatched_at,
+                    origin.id as origin_id,
+                    origin.name as origin_name,
+                    origin.iata_code as origin_iata,
+                    origin.city as origin_city,
+                    origin.country as origin_country,
+                    origin.latitude as origin_latitude,
+                    origin.longitude as origin_longitude,
+                    dest.id as dest_id,
+                    dest.name as dest_name,
+                    dest.iata_code as dest_iata,
+                    dest.city as dest_city,
+                    dest.country as dest_country,
+                    dest.latitude as dest_latitude,
+                    dest.longitude as dest_longitude
+                FROM flights f
+                INNER JOIN airports origin ON f.origin_airport_id = origin.id
+                INNER JOIN airports dest ON f.destination_airport_id = dest.id
+                WHERE f.id = ?
+            ";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("i", $flightId);
+            
+        } else if ($role === 'Passenger') {
+            //remember: the passenger has to get the flight details ONLY if they are booked on it; not any other flight
+            $query = "
+                SELECT 
+                    f.id,
+                    f.flight_number,
+                    f.departure_time,
+                    f.flight_duration_hours,
+                    f.status,
+                    f.current_latitude,
+                    f.current_longitude,
+                    f.dispatched_at,
+                    pf.seat_number,
+                    pf.boarding_confirmed,
+                    pf.confirmed_at,
+                    origin.id as origin_id,
+                    origin.name as origin_name,
+                    origin.iata_code as origin_iata,
+                    origin.city as origin_city,
+                    origin.country as origin_country,
+                    origin.latitude as origin_latitude,
+                    origin.longitude as origin_longitude,
+                    dest.id as dest_id,
+                    dest.name as dest_name,
+                    dest.iata_code as dest_iata,
+                    dest.city as dest_city,
+                    dest.country as dest_country,
+                    dest.latitude as dest_latitude,
+                    dest.longitude as dest_longitude
+                FROM flights f
+                INNER JOIN airports origin ON f.origin_airport_id = origin.id
+                INNER JOIN airports dest ON f.destination_airport_id = dest.id
+                INNER JOIN passenger_flights pf ON f.id = pf.flight_id
+                WHERE f.id = ? AND pf.passenger_id = ?
+            ";
+            $stmt = $db->prepare($query);
+            $stmt->bind_param("ii", $flightId, $userId);
+            
+        } else {
+            respond("error", "Unauthorized role", null, 403);
+        }
+        
+        if (!$stmt) {
+            respond("error", "Database query failed", null, 500);
+        }
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        //check if flight exists and if user has access
+        if ($result->num_rows === 0) {
+            if ($role === 'Passenger') {
+                respond("error", "Flight not found or you are not booked on this flight", null, 404);
+            } else {
+                respond("error", "Flight not found", null, 404);
+            }
+        }
+        
+        $row = $result->fetch_assoc();
+        
+        //build the flight object (same structure for both roles)
+        $flight = [
+            'id' => $row['id'],
+            'flight_number' => $row['flight_number'],
+            'departure_time' => $row['departure_time'],
+            'flight_duration_hours' => (float)$row['flight_duration_hours'],
+            'status' => $row['status'],
+            'current_position' => [
+                'latitude' => (float)$row['current_latitude'],
+                'longitude' => (float)$row['current_longitude']
+            ],
+            'origin' => [
+                'id' => $row['origin_id'],
+                'name' => $row['origin_name'],
+                'iata_code' => $row['origin_iata'],
+                'city' => $row['origin_city'],
+                'country' => $row['origin_country'],
+                'coordinates' => [
+                    'latitude' => (float)$row['origin_latitude'],
+                    'longitude' => (float)$row['origin_longitude']
+                ]
+            ],
+            'destination' => [
+                'id' => $row['dest_id'],
+                'name' => $row['dest_name'],
+                'iata_code' => $row['dest_iata'],
+                'city' => $row['dest_city'],
+                'country' => $row['dest_country'],
+                'coordinates' => [
+                    'latitude' => (float)$row['dest_latitude'],
+                    'longitude' => (float)$row['dest_longitude']
+                ]
+            ]
+        ];
+        
+        //add the dispatched_at if it exists
+        if ($row['dispatched_at'] !== null) {
+            $flight['dispatched_at'] = $row['dispatched_at'];
+        }
+        
+        //add passenger-specific fields if role is Passenger
+        if ($role === 'Passenger') {
+            $flight['booking_details'] = [
+                'seat_number' => $row['seat_number'],
+                'boarding_confirmed' => (bool)$row['boarding_confirmed'],
+                'confirmed_at' => $row['confirmed_at']
+            ];
+        }
+        
+        //**FOR ATC ONLY: Get the passenger list**
+        if ($role === 'ATC') {
+            $passengerQuery = "
+                SELECT 
+                    u.id,
+                    u.username,
+                    u.email,
+                    pf.seat_number,
+                    pf.boarding_confirmed,
+                    pf.confirmed_at
+                FROM passenger_flights pf
+                INNER JOIN users u ON pf.passenger_id = u.id
+                WHERE pf.flight_id = ?
+                ORDER BY u.username ASC
+            ";
+            
+            $passengerStmt = $db->prepare($passengerQuery);
+            $passengerStmt->bind_param("i", $flightId);
+            $passengerStmt->execute();
+            $passengerResult = $passengerStmt->get_result();
+            
+            $passengers = [];
+            while ($passengerRow = $passengerResult->fetch_assoc()) {
+                $passengers[] = [
+                    'id' => $passengerRow['id'],
+                    'username' => $passengerRow['username'],
+                    'email' => $passengerRow['email'],
+                    'seat_number' => $passengerRow['seat_number'],
+                    'boarding_confirmed' => (bool)$passengerRow['boarding_confirmed'],
+                    'confirmed_at' => $passengerRow['confirmed_at']
+                ];
+            }
+            
+            $flight['passengers'] = $passengers;
+            $flight['passenger_count'] = count($passengers);
+        }
+        
+        respond("success", "Flight retrieved successfully", $flight);
+    }
+
+    
 ?>
